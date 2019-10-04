@@ -1,4 +1,3 @@
-#requires -version 4
 <#
 .SYNOPSIS
   <Overview of script>
@@ -26,70 +25,106 @@
 [CmdletBinding()]
 Param (
   #Script parameters go here
-  [Parameter(mandatory=$false)] [switch]$RunningLog
+  [Parameter(Mandatory = $false)] [String] $Path
+  ,[Parameter(mandatory=$false)] [switch]$RunningLog
 )
 
 #---------------------------------------------------------[Initialisations]--------------------------------------------------------
 
 #Set Error Action to Silently Continue
-$ErrorActionPreference = 'Stop'
+#$ErrorActionPreference = 'Stop'
 
 #Import Modules & Snap-ins
 
 #----------------------------------------------------------[Declarations]----------------------------------------------------------
 
 #Any Global Declarations go here
+$computerName = $env:COMPUTERNAME
 $ScriptRoot=$PSScriptRoot
 $ScriptLogTime = Get-Date -format "yyyyMMddmmss"
 $ScriptName = (Get-Item $PSCommandPath).Basename
-$LogDirectory = "$ScriptRoot\Log"
-
-If( not (Test-path $LogDirectory))
-{
-  New-Item -ItemType Directory -Force -Path $LogDirectory
-}
+$LogDirectory = $ScriptRoot
+$PSVersionReturned=$PSVersionTable.PSVersion
+$Date = Get-Date
 
 if($RunningLog){
-  $ScriptLog= "$ScriptRoot\$LogDirectory\$ScriptName`_$ScriptLogTime.log"
+  Write-Verbose "Running Log switch passed"
+  $ScriptLog= "$LogDirectory\$ScriptName`_$ScriptLogTime.log"
 }else {
-  $ScriptLog= "$ScriptRoot\$LogDirectory\$ScriptName.log"
+  $ScriptLog= "$LogDirectory\$ScriptName.log"
 }
 
 
 #-----------------------------------------------------------[Functions]------------------------------------------------------------
+function Script_Information {
+    param (
+  )
+    Write-Output "$($MyInvocation.MyCommand)"
+    $Date.DateTime
+    Write-Output "Computer Name: $computerName"
+    Write-Output "PowerShell Version $PSVersionReturned"
+    Write-Output "ScriptRoot: $ScriptRoot"
+    Write-Output "ScriptName: $ScriptName"
+    Write-output "ScriptLog: $ScriptLog"
 
+}
 
+function Test_FileLock {
+  param ([parameter(Mandatory=$true)][string]$Path)
+  Write-Output "$($MyInvocation.MyCommand)"
+  $oFile = New-Object System.IO.FileInfo $Path
+  if ((Test-Path -Path $Path) -eq $false){
+    Write-Verbose "Default log file does not exist"
+    Return 0
+  }else{
+    try{
+      $oStream = $oFile.Open([System.IO.FileMode]::Open, [System.IO.FileAccess]::ReadWrite, [System.IO.FileShare]::None)
+      if ($oStream){
+        $oStream.Close()
+      }
+      Return 0
+    }catch{
+      # file is locked by a process.
+      return 1
+    }
+  }
+}
+#-----------------------------------------------------------[End Of Functions]------------------------------------------------------------
+
+#-----------------------------------------------------------[Main]------------------------------------------------------------
 Function Main {
   Param ()
-
   Begin {
+    Write-Output "$($MyInvocation.MyCommand)"
     Write-Output '<description of what is going on>...'
-
+    $StopWatch = [System.diagnostics.stopwatch]::StartNew()
+    Script_Information
   }
   Process {
     Try {
-      '<code goes here>'
+      Write-Output "Code Goes Here"
     }
     Catch {
-      Write-Error "Error: $($_.Exception)"
-      Break
+        Write-Error $PSItem -ErrorAction Stop
     }
   }
   End {
     If ($?) {
       write-output 'Completed Successfully.'
-      write-output ' '
+      $StopWatch.Stop()
+      Write-Output "Elapsed Seconds $($StopWatch.Elapsed.TotalSeconds)"
     }
   }
 }
-
+#-----------------------------------------------------------[End Of Main]------------------------------------------------------------
 
 #-----------------------------------------------------------[Execution]------------------------------------------------------------
-
-#Script Execution goes here
-Write-Output "ScriptRoot: $ScriptRoot"
-Write-Output "ScriptName: $ScriptName"
-Write-output "ScriptLog: $ScriptLog"
-Get-Date
+#Call main
+$IsFileLocked=Test_Filelock($Scriptlog)
+Write-verbose "IsFileLocked: $IsFileLocked"
+if($IsFileLocked -eq 1){
+  Write-Verbose "Default log file in use"
+  $ScriptLog= "$LogDirectory\$ScriptName`_$ScriptLogTime.log"
+}
 Main *>&1 | Tee-Object $ScriptLog
-Get-Date
+#-----------------------------------------------------------[End Of Execution]------------------------------------------------------------
